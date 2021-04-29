@@ -20,14 +20,16 @@ module CBD {
     }
 
     export var agentStateLabel =
-        [ ["Susceptible",        "Gefährdete",                 "Vatbaar",                    "Susceptible",        "Suscettibili",        "総数",            "Susceptible",              "易受感染者", "Sain/ Susceptible", "尚未感染者", "고위험군" ],
+        [ ["Susceptible",        "Gefährdete",                 "Vatbaar",                    "Susceptible",        "Suscettibili",        "総数",            "Susceptible",              "易受感染者", "Sain/ Susceptible", "尚未感染者", "고위험군"],
           ["Exposed: latent",    "Ausgesetzte: latent",        "Blootgesteld: latent",       "Exposed: latent",    "Esposti: latente",    "潜在的な感染者数", "Expuesto: latente",        "暴露：潛在", "Exposition: latente", "潜在受感染者", "접촉자: 잠복기 자가격리"],
           ["Exposed: presympt.", "Ausgesetzte: präsympt.",     "Blootgesteld: presympt.",    "Exposed: presympt.", "Esposti: presympt.",  "発症前の感染者数", "Expuesto: presintomático", "暴露：潛伏期", "Exposition: présympt.", "潜伏期受感染者", "접촉자: 무증상자" ],
           ["Infected",           "Infizierte",                 "Geïnfecteerd",               "Infected",           "Infetti",             "発症後の感染者数", "Infectado",                "確診", "Infecté", "确诊", "감염자"],
           ["Infected: severe",   "Infiz.: Schwer Erkrankte",   "Geïnfecteerd: ernstig ziek", "Infected: severe",   "Infetti: severo",     "中度の感染者数",   "Infectado: severo",        "受感染：重症", "Infecté:sévère", "确诊：重症", "감염자: 중증"],
           ["Infected: critical", "Infiz.: Kritisch Erkrankte", "Geïnfecteerd: kritiek",      "Infected: critical", "Infetti: critico",    "重篤な感染者数",   "Infectado: crítico",       "受感染：病危", "Infecté: critique", "确诊：病危", "감염자: 최중증"],
           ["Recovered",          "Genesene",                   "Genezen",                    "Recovered",          "Ristabiliti",         "回復患者数",       "Recuperado",               "治癒", "Guéri/ Soigné", "康复/治愈", "완치자"],
-          ["Deceased",           "Verstorbene",                "Overleden",                  "Deceased",           "Deceduti",            "死者数",           "Fallecido",                "死亡",    "Décédé", "死亡", "사망자"]];
+          ["Deceased", "Verstorbene", "Overleden", "Deceased", "Deceduti", "死者数", "Fallecido", "死亡", "Décédé", "死亡", "사망자"],
+          ["Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated", "Vaccinated"]
+        ];
 
     export var daysOfWeekLabel = [["Monday", "Montag", "Maandag", "Pazartesi", "Lunedì", "月曜", "Lunes", "星期一", "Lundi", "星期一", "월요일"], //       
         ["Tuesday", "Dienstag", "Dinsdag", "Salı", "Martedì", "火曜", "Martes", "星期二", "Mardi", "星期二", "화요일"],
@@ -38,9 +40,9 @@ module CBD {
         ["Sunday", "Sonntag", "Zondag", "Pazar", "Domenica", "日曜", "Domingo", "星期日", "Dimanche", "星期日", "일요일"]];
 
     export enum DayOfWeek { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
-    export enum LocationType { HOME, OFFICE, SHOP, SUPERMARKET, SCHOOL, RECREATION, RESTAURANT, HOSPITAL, GRAVESITE, UNDEFINED }
-    export enum AppointmentType { WORK, SCHOOL, SUPERMARKET, SHOPPING, RANDOMVISIT, RECREATION }
-    export enum InfectionState { SUSCEPTIBLE, EXPOSED_LATENT, EXPOSED_PRESYMPTOMATIC, INFECTED, INFECTEDSEVERE, INFECTEDCRITICAL, RECOVERED, DECEASED }
+    export enum LocationType { HOME, OFFICE, /*SHOP, */ SUPERMARKET, SCHOOL, RECREATION, RESTAURANT, HOSPITAL, GRAVESITE, UNDEFINED }
+    export enum AppointmentType { WORK, SCHOOL, SUPERMARKET, /* SHOPPING, */ RANDOMVISIT, RECREATION }
+    export enum InfectionState { SUSCEPTIBLE, EXPOSED_LATENT, EXPOSED_PRESYMPTOMATIC, INFECTED, INFECTEDSEVERE, INFECTEDCRITICAL, RECOVERED, DECEASED, VACCINATED }
     export enum MovementState { MOVING, STAYING }
     export enum OfficePolicy { COMEALWAYS, STAYHOMEWHENSICK, STAYHOMEALWAYS, CLOSEOFFICEANDLOCKEMPLOYEEHH }
     export enum HospitalizationPolicy { NONE, CRITICAL, SEVERE_AND_CRITICAL }
@@ -54,6 +56,7 @@ module CBD {
         Y18_24_O18_24, Y18_24_O25o,
         Y25o_O25o,
     };
+    export enum AgendaType { REGULAR, CHANGED }; // for robustness study
     export enum HouseholdType { S_0K, S_1K, S_2K, S_3K, C_0K, C_1K, C_2K, C_3K, MISC }
     enum SimulationControl { PAUSE, STEP, PLAY, FASTFORWARD, BIGSTEP, /*SUPERBIGSTEP,*/ SUPERFASTFORWARD }
     export enum Language { ENGLISH, GERMAN, DUTCH, TURKISH, ITALIAN, JAPANESE, SPANISH, TRADCHINESE, FRENCH, SIMPLCHINESE, KOREAN } // Don't change order: this is also the order of the languages in the label tables!
@@ -96,6 +99,8 @@ module CBD {
 
         centralityHelper: number = 0; // at present only used for offices and schools
         blocklock: boolean = false; // both for blocking and locking..
+        vaccinated: boolean = false;
+        __randomizationHelper: number = 0; //
 
         left: number;
         right: number;
@@ -146,7 +151,10 @@ module CBD {
         label: string;
         family: Array<Agent>;
 
+        allSusceptible(): boolean { return this.family.every(zz => zz.infectionState == InfectionState.SUSCEPTIBLE); }
+
         __centralityBridgeHelper: number;
+        __randomizationHelper: number; //
     }
 
     export class Statistics {
@@ -158,12 +166,15 @@ module CBD {
         nrInfectedCritical: number = 0;
         nrDeceased: number = 0;
         nrRecovered: number = 0;
+        nrVaccinated: number = 0;
+        nrTotal: number = 0;
 
         effectiveLabor: number = 0;
 
         log(sep: string): string {
             var str = "" + this.effectiveLabor + sep + this.nrSusceptible + sep + this.nrExposed_Latent + sep + this.nrExposed_Presymptomatic + sep + this.nrInfected + sep +
-                this.nrInfectedSevere + sep + this.nrInfectedCritical + sep + this.nrDeceased + sep + this.nrRecovered;
+                this.nrInfectedSevere + sep + this.nrInfectedCritical + sep + this.nrDeceased + sep + this.nrVaccinated + sep + this.nrRecovered + sep
+                + this.nrTotal;
             return str;
         }
     }
@@ -396,7 +407,7 @@ module CBD {
 
                 let rICU = document.getElementById("ICU_capacity") as HTMLInputElement;
                 var icucap = +rICU.value;
-                this.world.init(this.ctx, preincreaseseed, icucap, this.stylizedMap, this.includeRecAreasCentrality);
+                this.world.init(this.ctx, preincreaseseed, icucap, this.stylizedMap, this.includeRecAreasCentrality, AgendaType.REGULAR);
 
                 this.world.draw();// just one, to update when renewing/ refreshing something while paused..
 
@@ -481,16 +492,16 @@ module CBD {
 
 window.onload = () => {
 
+    
     var simulation = new CBD.Simulation();
     simulation.run(); 
-
-/*    
-    var exp = CBD.MCExperiment.TRACELAYER;
+    /*
+    var exp = CBD.MCExperiment._VACCINATELOCK; // _LOCK; //_VACCINATE;//.TRACELAYER;
     var tset = CBD.SettingMoment.IMMEDIATELY;
     var simulation = new CBD.SimulationMonteCarlo();    
     simulation.mcExperimentSetup(exp);
     simulation.mcExperimentRun(exp, tset, true);
-  */  
+ */
 };
 
 
