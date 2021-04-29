@@ -236,7 +236,7 @@ module CBD {
                     case "HOUSE": l.type = LocationType.HOME; break;
                     case "OFFICE": l.type = LocationType.OFFICE; break;
                     case "SUPERMARKET": l.type = LocationType.SUPERMARKET; break;
-                    case "SHOP": l.type = LocationType.SHOP; break;
+                    //case "SHOP": l.type = LocationType.SHOP; break;
                     case "RECREATIONAL": l.type = LocationType.RECREATION; break;
                     case "GRAVESITE": l.type = LocationType.GRAVESITE; break;
                 }
@@ -279,7 +279,7 @@ module CBD {
         }
 
         // DO NOT SET THE POLICY VARIABLES!
-        init(context: CanvasRenderingContext2D, preincreaseseed: boolean, icuCapacity: number, stylized: boolean, centralityIncludeRecAreas: boolean) {
+        init(context: CanvasRenderingContext2D, preincreaseseed: boolean, icuCapacity: number, stylized: boolean, centralityIncludeRecAreas: boolean, agendaType: AgendaType) {
 
             this.agents = new Array<Agent>();
             this.sites = new Array<Location>();
@@ -318,6 +318,7 @@ module CBD {
             //canvas.addEventListener('dblclick', this.doubleclick.bind(this));
 
             var nrhouseholds = 200;
+            
 
             this.initSiteInstancesFromLocalityData(stylized, centralityIncludeRecAreas); // also handles blocked variable
             this.setTotalICUCapacity(icuCapacity);
@@ -329,6 +330,7 @@ module CBD {
                 var rnddr = this.rng.nextNumber();
                 var ri = this.HouseholdTypeByAgeCohortDistribution.findIndex(zz => rnddr >= zz[0] && rnddr < zz[9]);
                 var rr = this.HouseholdTypeByAgeCohortDistribution[ri];
+                
                 var HH = <HouseholdType>ri;
                 var refAgentAG = <AgeGroup>(rr.findIndex(zz => zz > rnddr)-1);
 
@@ -382,13 +384,16 @@ module CBD {
                 //var rcN2H = this.findNearest(loc.GetMidX(), loc.GetMidY(), recarea);
                 var recareaFamily = new RecreationArea();
                 recareaFamily = this.recareas_[this.rng.nextInt32() % this.recareas_.length];
-                
+
                 var household = new Household();
+                household.__randomizationHelper = this.rng.nextInt32();
                 household.family = new Array<Agent>();
                 household.label = "";
                 household.location = loc;
                 this.households.push(household);
                 for (var k = 0; k < nrInHousehold; k++) {
+
+                    var jumpseed = this.rng.nextInt31(); // to remove effects for random draws because of agenda types..
 
                     var a = new Agent();
                     a.id = "id " + n++;
@@ -441,7 +446,6 @@ module CBD {
                             break;
                     }
 
-
                     // if (isNaN(a.age)) alert("" + a.id + "has NaN age!");
 
                     var weekday = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
@@ -455,10 +459,14 @@ module CBD {
                         }
                         a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, DayOfWeek.Saturday, begin, end, a.supermarketNearestToHome.location));
                         a.agenda.appointments.push(new Appointment(AppointmentType.RECREATION, DayOfWeek.Sunday, 11, 15, a.recareaFavorite.location));
+
                     }
                     else if (a.age > 20) {
 
-                        var nrOfficesToConsider = 3;
+                        var nrOfficesToConsider = 3; // 
+                        if (agendaType == AgendaType.CHANGED)
+                            nrOfficesToConsider = 7;
+
                         var nearbyOffices = new Array<Office>();
                         for (var off of this.workingplaces) nearbyOffices.push(off);
                         while (nearbyOffices.length > nrOfficesToConsider) {
@@ -515,16 +523,39 @@ module CBD {
                             a.workHomeEffectiveness *= frRedChildren;
                         }
 
-                        if (this.sites.find(zz => zz.label == a.workingplace.label) == null)
-                            this.sites.push(a.workingplace.location);
 
-                        for (var day of weekday) {
-                            a.agenda.appointments.push(new Appointment(AppointmentType.WORK, day, 8, 17, a.workingplace.location));
-                            a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, day, 17.5, 18.5, a.supermarketNearestToHome.location));
+                        if (agendaType == AgendaType.REGULAR) {
+                            if (this.sites.find(zz => zz.label == a.workingplace.label) == null)
+                                this.sites.push(a.workingplace.location);
+                            for (var day of weekday) {
+                                a.agenda.appointments.push(new Appointment(AppointmentType.WORK, day, 8, 17, a.workingplace.location));
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, day, 17.5, 18.5, a.supermarketNearestToHome.location));
+                            }
                         }
-                        //a.agenda.appointments.push(new Appointment(AppointmentType.SHOPPING, DayOfWeek.Saturday, 11, 14, a.recareaFavorite));
-                        a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, DayOfWeek.Saturday, 14, 16, a.supermarketNearestToHome.location));
+                        else {                        
+                            if (this.sites.find(zz => zz.label == a.workingplace.label) == null)
+                                this.sites.push(a.workingplace.location);
+
+                            for (var day of weekday) {
+                                if ((this.rng.nextInt32() % 2) == 0) {
+                                    a.agenda.appointments.push(new Appointment(AppointmentType.WORK, day, 8, 17, a.workingplace.location));
+                                }
+                                else {
+                                    a.agenda.appointments.push(new Appointment(AppointmentType.WORK, day, 8.5, 17.5, a.workingplace.location));
+                                }
+                                if ((this.rng.nextInt32() % 2) == 0) {
+                                    a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, day, 17.5, 18.5, a.supermarketNearestToHome.location));
+                                } else {
+                                    a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, day, 19.0, 20.0, a.supermarketNearestToHome.location));
+                                }
+                            }
+                        }
+                        
+                        var spmt = this.rng.nextInt32([10, 16]);
+                        a.agenda.appointments.push(new Appointment(AppointmentType.SUPERMARKET, DayOfWeek.Saturday, spmt, spmt + 2, a.supermarketNearestToHome.location));
+
                         a.agenda.appointments.push(new Appointment(AppointmentType.RECREATION, DayOfWeek.Sunday, 11, 15, a.recareaFavorite.location));
+
                     }
                     else {
 
@@ -534,26 +565,60 @@ module CBD {
                         if (this.sites.find(zz => zz.label == a.schoolNearestToHome.location.label) == null) // add to sites to draw
                             this.sites.push(a.schoolNearestToHome.location);
 
-                        var weekday = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
-                        for (var day of weekday) {
-                            a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, day, 9, 16, a.schoolNearestToHome.location));
-                        }
+                        if (agendaType == AgendaType.REGULAR) {
 
+                            var weekday = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
+                            for (var day of weekday) {
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, day, 9, 16, a.schoolNearestToHome.location));
+                            }
+                        }
+                        else {
+
+                            if (a.age < 13) {
+
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, DayOfWeek.Monday, 9, 16, a.schoolNearestToHome.location));
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, DayOfWeek.Tuesday, 9, 16, a.schoolNearestToHome.location));
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, DayOfWeek.Wednesday, 9, 12.5, a.schoolNearestToHome.location));
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, DayOfWeek.Thursday, 9, 16, a.schoolNearestToHome.location));
+                                a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, DayOfWeek.Friday, 9, 16, a.schoolNearestToHome.location));
+                            }
+                            else {
+                                var weekday = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
+                                for (var day of weekday) {
+                                    var begintime = 9;
+                                    if (this.rng.nextInt32() % 2 == 0) {
+                                        begintime = 10;
+                                    }
+                                    var endtime = 16;
+                                    if (this.rng.nextInt32() % 2 == 0) {
+                                        endtime = 15;
+                                    }    
+                                    a.agenda.appointments.push(new Appointment(AppointmentType.SCHOOL, day, begintime, endtime, a.schoolNearestToHome.location));
+                                }
+                            }
+                        }
                         a.agenda.appointments.push(new Appointment(AppointmentType.RECREATION, DayOfWeek.Sunday, 11, 15, a.recareaFavorite.location));
                     }
+
+                    this.rng = new RNG(jumpseed);
+
                     this.agents.push(a);
                     household.family.push(a);
                 }
                 for (var _a of household.family) {
                     _a.family = household.family;
                 }
-
-
-                /*var famstr = "";
-                household.family.forEach(zz => famstr += " " + zz.age);
-                console.debug(famstr);  */
             }
 
+            this.sitesForCentrality.forEach(zz => zz.__randomizationHelper = this.rng.nextInt32());
+
+            /*
+            for (var hi = 0; hi < this.households.length; hi++) {
+                var famstr = ("" + (1000 + hi)).substr(1, 3) + ": ";
+                this.households[hi].family.forEach(aa => famstr += aa.age + " ");
+                console.debug(famstr);
+            }*/
+            
             var tr = new TransmissionChannelsMeso();
             var newStyleCentrality = false; 
             if (newStyleCentrality) {
@@ -568,11 +633,11 @@ module CBD {
             var checkorder = [HouseholdType.C_2K, HouseholdType.C_3K, HouseholdType.S_2K, HouseholdType.S_3K, HouseholdType.C_1K, HouseholdType.S_1K, HouseholdType.C_0K, , HouseholdType.MISC];
             var patientZero = null;
             for (var hh of checkorder) {
-                patientZero = this.agents.find(zz => zz.householdtype == hh);
-                if (patientZero != null) break;
+                patientZero = this.agents.filter(zz => zz.householdtype == hh && !zz.house.vaccinated);
+                if (patientZero != null && patientZero.length>0) break;
             }
-            patientZero.expose(0, this.rng, 1);
 
+            patientZero[this.rng.nextInt32() % patientZero.length].expose(0, this.rng, 1);
         }
 
 
@@ -582,7 +647,8 @@ module CBD {
                 
                 var totcentr = 0;
                 for (var ag of hh.family) {
-                    var loc = ag.schoolNearestToHome.location;
+                    var loc = null;
+                    if (ag.schoolNearestToHome != null) loc = ag.schoolNearestToHome.location;
                     if (loc == null && ag.workingplace != null) loc = ag.workingplace.location; //
                     if (loc == null) continue; // might be retired person
                     totcentr += loc.centralityHelper;
@@ -592,6 +658,106 @@ module CBD {
             this.households.sort((a, b) => - a.__centralityBridgeHelper + b.__centralityBridgeHelper);
             for (var i = 0; i < this.households.length; i++)
                 this.households[i].location.blocklock = i < nr;
+        }
+
+
+//        nrAgentsToVaccinate: number = -1;
+
+        vaccinateHouseholds(nr: number, benchmark: boolean) {
+            // Since this is the benchmark case.. first check how many people are being vaccinated when using the centrality measures
+            /*
+            if (this.nrAgentsToVaccinate < 0) {
+                for (var hh of this.households) {
+                    var totcentr = 0;
+                    for (var ag of hh.family) {
+                        var loc = null;
+                        if (ag.schoolNearestToHome != null) loc = ag.schoolNearestToHome.location;
+                        if (loc == null && ag.workingplace != null) loc = ag.workingplace.location; //
+                        if (loc == null) continue; // might be retired person
+                        totcentr += loc.centralityHelper;
+                    }
+                    hh.__centralityBridgeHelper = totcentr;
+                }
+                this.households.sort((a, b) => - a.__centralityBridgeHelper + b.__centralityBridgeHelper);
+                var nrAgentsToVaccinate = 0;
+                for (var i = 0; i < nr; i++) {
+                    nrAgentsToVaccinate += this.households[i].family.length;
+                }
+            }
+
+            // this.households.forEach(zz => zz.__centralityBridgeHelper = this.rng.nextInt32()); // assign random number for sorting households randomly!
+            this.households.sort((a, b) => - a.__randomizationHelper + b.__randomizationHelper); // now randomized
+            var index = 0;
+            var nragents = nrAgentsToVaccinate;
+            while (nragents > 0) {
+                var fammembers = this.households[index++].family;
+
+                if (fammembers.length > nragents) continue; // assume that the households available do not run out ;-)
+
+                nragents -= fammembers.length;
+                fammembers.forEach(zz => zz.vaccinate(0));
+            } */
+
+            var hhh = this.households.filter(zz => zz.allSusceptible());
+            if (hhh.length < nr) {
+                alert("Not enough households available!");
+            }
+            if (benchmark) {
+                hhh.sort((a, b) => - a.__randomizationHelper + b.__randomizationHelper); // now randomized
+                for (var i = 0; i < nr; i++) {
+                    for (var ag of hhh[i].family) {
+                        ag.vaccinate(0);
+                    }
+                }
+            }
+            else {
+                for (var hh of hhh) {
+
+                    var totcentr = 0;
+                    for (var ag of hh.family) {
+                        var loc = null;
+                        if (ag.schoolNearestToHome != null) loc = ag.schoolNearestToHome.location;
+                        if (loc == null && ag.workingplace != null) loc = ag.workingplace.location; //
+                        if (loc == null) continue; // might be retired person
+                        totcentr += loc.centralityHelper;
+                    }
+                    hh.__centralityBridgeHelper = totcentr;
+                }
+                hhh.sort((a, b) => - a.__centralityBridgeHelper + b.__centralityBridgeHelper);
+                for (var i = 0; i < nr; i++) {
+                    for (var ag of hhh[i].family) {
+                        ag.vaccinate(0);
+                    }
+                }
+            }
+        }
+
+
+        vaccinateSites(nr: number, benchmark: boolean) {
+
+            this.sitesForCentrality.forEach(zz => zz.vaccinated = false);
+            if (benchmark) {
+                this.sitesForCentrality.sort((a, b) => - a.__randomizationHelper + b.__randomizationHelper);
+            }
+            else {
+                this.sitesForCentrality.sort((a, b) => - a.centralityHelper + b.centralityHelper);
+            }
+
+            for (var i = 0; i < nr; i++) {
+                this.sitesForCentrality[i].vaccinated = true;
+
+                switch (this.sitesForCentrality[i].type) {
+                    case LocationType.OFFICE: this.workingplaces.find(zz => zz.location.ID == this.sitesForCentrality[i].ID).employees.forEach(xx => xx.vaccinate(0)); break;
+                    case LocationType.SCHOOL: this.schools_.find(zz => zz.location.ID == this.sitesForCentrality[i].ID).schoolchildren.forEach(xx => xx.vaccinate(0)); break;
+                    case LocationType.SUPERMARKET: this.supermarkets.find(zz => zz.location.ID == this.sitesForCentrality[i].ID).visitors.forEach(xx => xx.vaccinate(0)); break;
+                    case LocationType.RECREATION: this.recareas_.find(zz => zz.location.ID == this.sitesForCentrality[i].ID).visitors.forEach(xx => xx.vaccinate(0)); break;
+                    case LocationType.HOME: /* this.households.find(zz => zz.location.ID == this.sitesForCentrality[i].ID).family.forEach(xx => xx.vaccinate(0)); break; */
+                    case LocationType.HOSPITAL:
+                    case LocationType.GRAVESITE:
+                        alert("Bridging site");
+                        break;
+                }
+            }
         }
 
         blockCentralSitesNew(nr: number) {
@@ -612,7 +778,7 @@ module CBD {
                     case LocationType.HOSPITAL: col = '#FCE8E6'; break; // on the map image, it is '#F6B76A' to look like residential area.. However, we do use a different color for the hospital..
                     case LocationType.OFFICE: col = "#d7c9e3"; break;
                     case LocationType.SCHOOL: col = "#FF3C82"; break;
-                    case LocationType.SHOP: col = "#f19179"; break;
+                    /* case LocationType.SHOP: col = "#f19179"; break;*/
                     case LocationType.SUPERMARKET: col = "#f19179"; break;
                     case LocationType.RECREATION: col = "#a8cf71"; break;
                     case LocationType.GRAVESITE: col = '#0094FF'; break;
@@ -741,7 +907,7 @@ module CBD {
 
             var y = margin + ftsz;
             var ifst = [InfectionState.SUSCEPTIBLE, InfectionState.EXPOSED_LATENT, InfectionState.EXPOSED_PRESYMPTOMATIC, InfectionState.INFECTED,
-                            InfectionState.INFECTEDSEVERE, InfectionState.INFECTEDCRITICAL, InfectionState.RECOVERED, InfectionState.DECEASED];
+                            InfectionState.INFECTEDSEVERE, InfectionState.INFECTEDCRITICAL, InfectionState.RECOVERED, InfectionState.DECEASED, InfectionState.VACCINATED];
             for (var st of ifst) {
 
                 var nr = this.agents.filter(zz => zz.infectionState == st).length;
@@ -990,15 +1156,24 @@ module CBD {
         }
 
 
-        step() {
+
+
+        step(experiment: MCExperiment = MCExperiment.NONE) {
 
             var w = this.ctx.canvas.width;
             var h = this.ctx.canvas.height;
+            /*
 
-            this.households.forEach(ss => ss.location.blocklock = false );
-            this.schools_.forEach(ss => { ss.location.blocklock = false; ss.hasInfectedChild = ss.schoolchildren.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
-            this.workingplaces.forEach(ss => { ss.location.blocklock = false; ss.hasInfectedWorker = ss.employees.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
-            this.recareas_.forEach(ss => { ss.location.blocklock = false; ss.hasInfectedVisitor = ss.visitors.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
+            if (experiment == MCExperiment.NONE) {
+                this.households.forEach(ss => ss.location.blocklock = false);
+                this.schools_.forEach(ss => { ss.location.blocklock = false; });
+                this.workingplaces.forEach(ss => { ss.location.blocklock = false; });
+                this.recareas_.forEach(ss => { ss.location.blocklock = false; });
+            }
+            */
+            this.schools_.forEach(ss => { ss.hasInfectedChild = ss.schoolchildren.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
+            this.workingplaces.forEach(ss => { ss.hasInfectedWorker = ss.employees.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
+            this.recareas_.forEach(ss => { ss.hasInfectedVisitor = ss.visitors.some(zz => zz.infectionState == InfectionState.INFECTED || zz.infectionState == InfectionState.INFECTEDCRITICAL || zz.infectionState == InfectionState.INFECTEDSEVERE); });
             this.policyBasedSchoolBlock();
             this.policyBasedOfficeBlock();
             this.policyBasedRecAreaBlock();
@@ -1073,11 +1248,14 @@ module CBD {
                     case InfectionState.INFECTEDCRITICAL: s.nrInfectedCritical++; break;
                     case InfectionState.RECOVERED: s.nrRecovered++; break;
                     case InfectionState.DECEASED: s.nrDeceased++; break;
+                    case InfectionState.VACCINATED: s.nrVaccinated++; break;
                 }
 
                 for (var i = 0; i < nrworkoutp; i++)
                     s.effectiveLabor += a.laborOutputs[a.laborOutputs.length - i - 1].fractionEffective;
             }
+            s.nrTotal = this.agents.length;
+
             if (nrworkoutp > 0)
                 s.effectiveLabor /= nrworkoutp;
 
