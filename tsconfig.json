@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "skipLibCheck": true, // to get past query d.ts error
+    "outDir": "distrib",
+    "target": "ES3",
+    "module": "ES6",
+    "lib": [ "ES2015", "DOM" ]
+  }
+}
