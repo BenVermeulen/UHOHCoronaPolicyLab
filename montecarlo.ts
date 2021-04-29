@@ -59,7 +59,8 @@ module CBD {
         }
 
         stylizedMap: boolean = false;
-        includeRecAreasCentrality: boolean = true; // only in case of newstyle centrality measures..
+        includeRecAreasCentrality: boolean = false; // only in case of newstyle centrality measures..
+        agendaType: AgendaType = AgendaType.REGULAR;
 
         logAgentDiseaseHistory() {
             this.world.agents.forEach(zz => {
@@ -88,7 +89,7 @@ module CBD {
             this.stackedgraph.init();
             this.stackedgraph.tMax = 10;
 
-            this.world.init(this.ctx, false, this.defaultICUCap, this.stylizedMap, this.includeRecAreasCentrality);
+            this.world.init(this.ctx, false, this.defaultICUCap, this.stylizedMap, this.includeRecAreasCentrality, this.agendaType);
 
             this.linegraph = new Graph("graphecon");
             this.linegraph.init(label => { return '#ff0000'; });
@@ -143,8 +144,8 @@ module CBD {
 
         initWorld(seed: number) {
 
-            this.world.rngSeed = seed; 
-            this.world.init(this.ctx, false, this.defaultICUCap, this.stylizedMap, this.includeRecAreasCentrality);
+            this.world.rngSeed = seed;
+            this.world.init(this.ctx, false, this.defaultICUCap, this.stylizedMap, this.includeRecAreasCentrality, this.agendaType);
         }
 
         drawWorld() {
@@ -179,14 +180,14 @@ module CBD {
 
     }
 
-    export enum MCExperiment { LOCK, BLOCK, TRACELAYER }
+    export enum MCExperiment { _LOCK, _BLOCK, _TRACELAYER, _VACCINATELOCK, _VACCINATEBLOCK, NONE }
     export enum SettingMoment { IMMEDIATELY, UPONSEVERECASE }
 
     export class SimulationMonteCarlo extends SimulationBase {
         combi: Combi = null;
         mcInited = false;
         minNrDaysPerSimulation = 60;
-        nrSeedsPerSetting = 30;
+        nrSeedsPerSetting = 100; 
         nrSeedsHad = 0;
         nrRunsHad = 0;
         initSeed = 11;
@@ -218,6 +219,7 @@ module CBD {
             this.world.policyHospitalization = HospitalizationPolicy.CRITICAL;
             this.world.policyPhysicalMeasures = false;
             this.world.setPolicyInterregionalTravel(true);
+            this.agendaType = AgendaType.REGULAR;
         }
 
 
@@ -229,13 +231,41 @@ module CBD {
             this.world.policyHospitalization = HospitalizationPolicy.CRITICAL;
             this.world.policyPhysicalMeasures = settings[4] > 0;
             this.world.setPolicyInterregionalTravel(settings[5] > 0);
-
+            this.agendaType = settings[6];
             if (lockNotBlock)
-                this.world.lockBridgingHouseholds(settings[6]);
+                this.world.lockBridgingHouseholds(settings[7]);
             else
-                this.world.blockCentralSitesNew(settings[6]);
+                this.world.blockCentralSitesNew(settings[7]);
         }
 
+        mcSetVaccinateLockSpread(settings: number[]) {
+
+            this.world.policyGathering = settings[0];
+            this.world.policyOffice = settings[1];
+            this.world.policySchool = settings[2];
+            this.world.setTotalICUCapacity(settings[3]);
+            this.world.policyHospitalization = HospitalizationPolicy.CRITICAL;
+            this.world.policyPhysicalMeasures = settings[4] > 0;
+            this.world.setPolicyInterregionalTravel(settings[5] > 0);
+            this.agendaType = settings[6];
+
+            var benchmark = true;
+            this.world.vaccinateHouseholds(settings[7], benchmark);
+        }
+
+        mcSetVaccinateBlockBridge(settings: number[]) {
+            this.world.policyGathering = settings[0];
+            this.world.policyOffice = settings[1];
+            this.world.policySchool = settings[2];
+            this.world.setTotalICUCapacity(settings[3]);
+            this.world.policyHospitalization = HospitalizationPolicy.CRITICAL;
+            this.world.policyPhysicalMeasures = settings[4] > 0;
+            this.world.setPolicyInterregionalTravel(settings[5] > 0);
+            this.agendaType = settings[6];
+
+            var benchmark = true;
+            this.world.vaccinateSites(settings[7], benchmark);
+        }
 
         mcSetTraceLayer(settings: number[]) {
             this.world.policyGathering = settings[0];
@@ -245,14 +275,22 @@ module CBD {
             this.world.policyHospitalization = HospitalizationPolicy.CRITICAL;
             this.world.policyPhysicalMeasures = settings[4] > 0;
             this.world.setPolicyInterregionalTravel(settings[5] > 0);
+            this.agendaType = settings[6];
         }
 
+        
+        setDone: boolean = false;
         mcSet(experiment: MCExperiment, settings: number[]) {
+            if (this.setDone) return;
+
             switch (experiment) {
-                case MCExperiment.LOCK: this.mcSetBlockLock(settings, true); break;
-                case MCExperiment.BLOCK: this.mcSetBlockLock(settings, false); break;
-                case MCExperiment.TRACELAYER: this.mcSetTraceLayer(settings); break;
+                case MCExperiment._VACCINATEBLOCK: this.mcSetVaccinateBlockBridge(settings); break;
+                case MCExperiment._VACCINATELOCK: this.mcSetVaccinateLockSpread(settings); break;
+                case MCExperiment._LOCK: this.mcSetBlockLock(settings, true); break;
+                case MCExperiment._BLOCK: this.mcSetBlockLock(settings, false); break;
+                case MCExperiment._TRACELAYER: this.mcSetTraceLayer(settings); break;
             }
+            this.setDone = true;
         }
 
 
@@ -270,6 +308,7 @@ module CBD {
                 this.world.policyGathering + sep +
                 this.world.getPolicyInterregionalTravel() + sep +
                 this.world.getTotalICUCapacity() + sep +
+                this.agendaType + sep +
                 nrLockedHH + sep +
                 nrBlockedLocation + sep +
                 stats.log(sep));
@@ -289,34 +328,77 @@ module CBD {
                 this.world.policyGathering + sep +
                 this.world.getPolicyInterregionalTravel() + sep +
                 this.world.getTotalICUCapacity() + sep +
+                this.agendaType + sep +
                 (lockNotBlock
                     ? this.world.households.filter(zz => zz.location.blocklock).length
                     : this.world.sitesForCentrality.filter(zz => zz.blocklock).length) + sep +
                 stats.log(sep));
         }
 
+        logSimulationResultsVaccinate(stats: Statistics, lockNotBlock: boolean) {
+            var sep = "\t";
+            var tt = Math.trunc(this.world.time / CBDGlobal.TicksPerDay);
+            var ss = "";
+            if (lockNotBlock) {
+                ss = "" + this.world.households.filter(zz => zz.family.some(xx => xx.infectionState == InfectionState.VACCINATED)).length;
+            } else {
+                ss = "" + this.world.sites.filter(zz => zz.vaccinated).length;
+            }
+
+            console.debug("" + this.nrRunsHad + sep + this.world.rngSeed + sep +
+                tt + sep +
+                this.world.policyPhysicalMeasures + sep +
+                this.world.policySchool + sep +
+                this.world.policyOffice + sep +
+                this.world.policyHospitalization + sep +
+                this.world.policyGathering + sep +
+                this.world.getPolicyInterregionalTravel() + sep +
+                this.world.getTotalICUCapacity() + sep +
+                this.agendaType + sep +
+                ss + sep +
+                stats.log(sep));
+        }
+
         mcConstructCombis(experiment: MCExperiment) {
             switch (experiment) {
-                case MCExperiment.LOCK: this.mcConstructBlockLockCombis(true); break;
-                case MCExperiment.BLOCK: this.mcConstructBlockLockCombis(false); break;
-                case MCExperiment.TRACELAYER: this.mcConstructLayerTraceCombis(); break;
+                case MCExperiment._LOCK: this.mcConstructBlockLockCombis(true); break;
+                case MCExperiment._BLOCK: this.mcConstructBlockLockCombis(false); break;
+                case MCExperiment._TRACELAYER: this.mcConstructLayerTraceCombis(); break;
+                case MCExperiment._VACCINATELOCK: this.mcConstructVaccinateCombis(true); break;
+                case MCExperiment._VACCINATEBLOCK: this.mcConstructVaccinateCombis(false); break;
             }
         }
 
         mcConstructBlockLockCombis(lockNotBlock: boolean) {  
             this.combi = new Combi();
 
+            this.combi.push([GatheringsPolicy.PROHIBITED, GatheringsPolicy.ALLOWED]);
+            this.combi.push([OfficePolicy.COMEALWAYS]);
+            this.combi.push([SchoolPolicy.COMEALWAYS]);
+            this.combi.push([2]); // ICU capacity
+            this.combi.push([1]); //0, 1]); // PHYS
+            this.combi.push([1]); //0,1]); // reg
+            this.combi.push([AgendaType.REGULAR, AgendaType.CHANGED]);
+            if (lockNotBlock) // 0,2,4,6,8,10,12,14,16,18,20,22,
+                this.combi.push([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24,26,28,30,32,34,36,38,40]);//this.combi.push([0, 10, 20, 30, 40]);
+            else
+                this.combi.push([0, 2, 4, 6, 8, 10, 12, 14, 16]);
+        }
+
+        mcConstructVaccinateCombis(lockNotBlock: boolean) {
+            this.combi = new Combi();
             this.combi.push([GatheringsPolicy.PROHIBITED]);
             this.combi.push([OfficePolicy.COMEALWAYS]);
             this.combi.push([SchoolPolicy.COMEALWAYS]);
             this.combi.push([2]); // ICU capacity
-            this.combi.push([0, 1]); // PHYS
-            this.combi.push([0, 1]); // reg
+            this.combi.push([1]); //0, 1]); // PHYS
+            this.combi.push([0]); //0,1]); // reg
+            this.combi.push([AgendaType.REGULAR]);
 
             if (lockNotBlock)
-                this.combi.push([0, 10, 20, 30, 40]);
+                this.combi.push([10, 30, 50, 70, 90, 110]);//this.combi.push([0, 10, 20, 30, 40]);
             else
-                this.combi.push([0, 7, 14]);
+                this.combi.push([0, 2, 4, 6, 8, 10, 12]);
         }
 
         mcConstructLayerTraceCombis() {
@@ -327,21 +409,26 @@ module CBD {
             this.combi.push([2]); // ICU capacity
             this.combi.push([0, 1]); // PHYS
             this.combi.push([0, 1]); // reg
+            this.combi.push([AgendaType.REGULAR]);
         }
 
         settings: number[];
 
 
-        saveData(experiment: MCExperiment, draw: boolean) {
-            if (this.shouldSaveData()) {
+        saveData(experiment: MCExperiment, draw: boolean, logDebug: boolean, forceLog: boolean) {
+            if (this.shouldSaveData() || forceLog) {
                 var stats = this.world.getStatistics();
                 this.updateStatisticsForStabilizationMajorChange(stats);
                 if (draw) this.updateGraphics(stats);
 
-                switch (experiment) {
-                    case MCExperiment.LOCK: this.logSimulationResultsBlockLock(stats, true); break;
-                    case MCExperiment.BLOCK: this.logSimulationResultsBlockLock(stats, false); break;
-                    case MCExperiment.TRACELAYER: this.logSimulationResultsTraceLayer(stats); break;
+                if (logDebug) {
+                    switch (experiment) {
+                        case MCExperiment._LOCK: this.logSimulationResultsBlockLock(stats, true); break;
+                        case MCExperiment._BLOCK: this.logSimulationResultsBlockLock(stats, false); break;
+                        case MCExperiment._TRACELAYER: this.logSimulationResultsTraceLayer(stats); break;
+                        case MCExperiment._VACCINATELOCK: this.logSimulationResultsVaccinate(stats, true); break;
+                        case MCExperiment._VACCINATEBLOCK: this.logSimulationResultsVaccinate(stats, false); break;
+                    }
                 }
             }
         }
@@ -371,14 +458,16 @@ module CBD {
                 }
 
                 // Every simulation day, update statistics and (possibly) graphics
-                this.saveData(experiment, draw);
+                this.saveData(experiment, draw, false, false);
 
                 // Every tick take a simulation step
-                this.world.step();
+                this.world.step(experiment);
             }
 
             // see whether the simulation run is done
-            if (this.runIsStable() && this.ranLongEnough()) {
+            if (this.world.time >= CBDGlobal.TicksPerDay * 180) { //this.runIsStable() && this.ranLongEnough()) {
+
+                this.saveData(experiment, false, true, true);
 
                 // Simulation run is done: start a new simulation instance?
                 // 1. Had all seeds -> set new combi of policies
@@ -388,6 +477,7 @@ module CBD {
                     this.settings = this.combi.getNext();
                     this.nrSeedsHad = -1;
                 }
+                this.setDone = false;
                 this.nrSeedsHad++;
                 this.nrRunsHad++;
 
@@ -397,21 +487,11 @@ module CBD {
                     this.mcDefault();
                     this.hasSeenSevere = false;
                 }
-                else {
-                    this.flushConsole();
-                }
                 if (draw) this.resetGraphics();
             }
 
             window.requestAnimationFrame(() => this.mcExperimentRun(experiment, settingMoment, draw));
         }
-
-        flushConsole() {
-            // artificial flush -- a bug internal to Visual Studio stalls flushing thus causing me to miss simulation output
-            for (var i = 0; i < 500; i++) console.debug("-----------------------------------");
-        }
-
-
     }
 
 
@@ -420,6 +500,7 @@ module CBD {
     export class HistogramWrapper {
 
         withSus: boolean = false;
+        withVaccinated: boolean = true;
 
         instantiate(withSuscept: boolean) {
             this.withSus = withSuscept;
@@ -432,7 +513,7 @@ module CBD {
             for (var binIndex = 0; binIndex < 10; binIndex++) {
                 var bin = this.histogram.addBin("" + binIndex, binIndex * binWidth, (binIndex + 1) * binWidth - 1);
 
-                for (var componentID = (this.withSus ? InfectionState.SUSCEPTIBLE : InfectionState.EXPOSED_LATENT); componentID <= InfectionState.DECEASED; componentID++) {
+                for (var componentID = (this.withSus ? InfectionState.SUSCEPTIBLE : InfectionState.EXPOSED_LATENT); componentID <= (this.withVaccinated ? InfectionState.VACCINATED: InfectionState.DECEASED); componentID++) {
                     bin.setComponent(componentID, 0);
                 }
             }
@@ -443,7 +524,7 @@ module CBD {
             var binWidth = 10;
             for (var binIndex = 0; binIndex < 10; binIndex++) {
                 var bin = this.histogram.addBin("" + binIndex, binIndex * binWidth, (binIndex + 1) * binWidth - 1);
-                for (var componentID = (this.withSus ? InfectionState.SUSCEPTIBLE : InfectionState.EXPOSED_LATENT); componentID <= InfectionState.DECEASED; componentID++) {
+                for (var componentID = (this.withSus ? InfectionState.SUSCEPTIBLE : InfectionState.EXPOSED_LATENT); componentID <= (this.withVaccinated ? InfectionState.VACCINATED : InfectionState.DECEASED); componentID++) {
                     bin.setComponent(componentID, 0);
                 }
             }
