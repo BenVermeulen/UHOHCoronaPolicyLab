@@ -25,10 +25,33 @@ export class Agent {
     infectionState: InfectionState;
     timeE: number;
 
+    vaccinate(time: number) {
+        //console.log("Vaccinate " + this.id);
+
+        if (this.infectionState == InfectionState.VACCINATED) {
+            alert("Already vaccinated!");
+            return;
+        }
+        if (this.infectionState != InfectionState.SUSCEPTIBLE) {
+            alert("Agent not in susceptible state, so e.g. already infected!");
+            return;
+        }
+        this.infectionState = InfectionState.VACCINATED;
+        if (this.diseaseHistory == null)
+            this.diseaseHistory = [];
+        this.diseaseHistory.push("" + time + " VACCINATED");
+    }
+
     expose(time: number, rng: RNG, incd: number = null) {
+        if (this.infectionState == InfectionState.VACCINATED) {
+            alert("Vaccinated!");
+            return;
+        }
+
         this.infectionState = InfectionState.EXPOSED_LATENT;
         this.diseaseHistory = [];
         this.diseaseHistory.push("" + time + " exposed, latent");
+
         var incdrw = rng.nextNumber();
         this.timeE = time;
         if (incd == null)
@@ -42,6 +65,16 @@ export class Agent {
         this.timeSR = this.timeIS + this.gateSR * CBDGlobal.TicksPerDay; // p.i.t. for recovery after severe, if not becoming critical
         this.timeCDorR = this.timeSC + this.gateCDorR * CBDGlobal.TicksPerDay; // p.i.t. die/ recover if critical
         //console.debug("Agent " + this.id + " exposed " + time + " / " + this.timeEI_Tot + " ( " + this.timeEI_L + " ) " + this.timeIS + " < " + this.timeIR + " / " + this.timeSC + " < " + this.timeSR + " / " + this.timeCDorR);
+        /*console.debug("" + this.id + "\t"
+            + (this.timeEI_Tot - time) / CBDGlobal.TicksPerDay + "\t"
+            + (this.timeEI_Tot - this.timeEI_L) / CBDGlobal.TicksPerDay + "\t"
+            + (this.timeEI_L - time) / CBDGlobal.TicksPerDay + "\t" //
+            + (this.timeIS - this.timeEI_Tot) / CBDGlobal.TicksPerDay + "\t" // 4
+            + (this.timeIR - this.timeEI_Tot) / CBDGlobal.TicksPerDay + "\t" // 9
+            + (this.timeSC - this.timeIS) / CBDGlobal.TicksPerDay + "\t" // 1
+            + (this.timeSR - this.timeIS) / CBDGlobal.TicksPerDay + "\t" // 14
+            + (this.timeCDorR - this.timeSC) / CBDGlobal.TicksPerDay // 10
+        );*/
     }
 
     timeEI_Tot: number;
@@ -108,6 +141,7 @@ export class Agent {
             case InfectionState.INFECTEDCRITICAL: color = '#ff0000'; break;
             case InfectionState.RECOVERED: color = '#b200ff'; break;
             case InfectionState.DECEASED: color = '#0026ff'; break;
+            case InfectionState.VACCINATED: color = '#ffffff'; break;
             default:
                 alert("Color for InfectionState not handled.");
                 break;
@@ -211,7 +245,8 @@ export class Agent {
         schoolPolicy: SchoolPolicy, officePolicy: OfficePolicy, hospitalPolicy: HospitalizationPolicy, gatheringPolicy: GatheringsPolicy) {
         
         if (this.infectionState == InfectionState.DECEASED) {
-            this.addWorkingRate(t, null); return;
+            this.addWorkingRate(t, null);
+            return;
         }
 
         if (this.movementState == MovementState.MOVING) {
@@ -254,17 +289,19 @@ export class Agent {
         }
         // Here, there is an appointment in the agenda..
 
-        if (this.house.blocklock) {
-            this.updatePosition(width, height, 0.7, true, rng);
-            this.addWorkingRate(t, appointment.appointmentType);
-            return;
-        }
+        if (this.infectionState != InfectionState.VACCINATED) { // if not vaccinated, check whether there is a block/lock. If vaccinated, permit following the agenda..
+            if (this.house.blocklock) {
+                this.updatePosition(width, height, 0.7, true, rng);
+                this.addWorkingRate(t, appointment.appointmentType);
+                return;
+            }
 
-        // policies whether infected or not 
-        if (appointment.getLocation().blocklock) {
-            this.addWorkingRate(t, appointment.appointmentType);
-            this.updatePosition(width, height, 0.7, true, rng);
-            return;
+            // policies whether infected or not 
+            if (appointment.getLocation().blocklock) {
+                this.addWorkingRate(t, appointment.appointmentType);
+                this.updatePosition(width, height, 0.7, true, rng);
+                return;
+            }
         }
 
         var bInfected = (this.infectionState == InfectionState.INFECTED); // || this.infectionState == InfectionState.INFECTEDSEVERE || this.infectionState == InfectionState.INFECTEDCRITICAL);
@@ -409,6 +446,8 @@ export class Agent {
     // unlike metapopulation models, the infection (i.e. the transition from susceptible to being infected) occurs by explicit social interaction in physical proximity
     diseaseProgress(time: number, rng: RNG) {
 
+        if (this.infectionState == InfectionState.VACCINATED) return;
+
         if (this.infectionState == InfectionState.DECEASED || this.infectionState == InfectionState.SUSCEPTIBLE || this.infectionState == InfectionState.RECOVERED) return;
 
         var drw = rng.nextNumber();
@@ -507,6 +546,9 @@ export class Agent {
     infectiousness = [[InfectionState.EXPOSED_LATENT, 0.0], [InfectionState.EXPOSED_PRESYMPTOMATIC, 0.05], [InfectionState.INFECTED, 0.1], [InfectionState.INFECTEDSEVERE, 0.1], [InfectionState.INFECTEDCRITICAL, 0.1]];
 
     infect(agents: Array<Agent>, infectionDistance: number, physicalMeasures: boolean, time: number, rng: RNG) {
+
+        if (this.infectionState == InfectionState.VACCINATED) return;
+
         // if in a non-infectious state, skip..
         if (this.infectionState == InfectionState.SUSCEPTIBLE || this.infectionState == InfectionState.RECOVERED || this.infectionState == InfectionState.DECEASED) return;
 
