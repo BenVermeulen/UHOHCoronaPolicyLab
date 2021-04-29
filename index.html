@@ -32,11 +32,10 @@
             exposed but latent/ non-infectious during incubation (light yellow), exposed and mildly presymptomatically infectious (yellow), infected and infectious (orange), severely ill (dark orange), critically ill (red), then either recovering and immune (purple) or deceased (blue).
         </p>
 
-        <!-- <p>
-        For testing purposes<br />
-        <label style="font-size:smaller;"><input type="checkbox" id="allow_SNA" style="margin-right:3px;" />Switch on SNA functionality</label><br />
-    </p>
-        -->
+        <p>
+            For testing purposes<br />
+            <label style="font-size:smaller;"><input type="checkbox" id="allow_SNA" style="margin-right:3px;" />Switch on SNA functionality</label><br />
+        </p>
 
         <div>
             <button type="button" id="language-EN" style="display:inline;padding:0px;margin:0px;border:0px;" title="In English"><img src=".\img\flag-32x20-EN.png" id="img-flag-EN" /></button>
@@ -151,7 +150,7 @@
             <p> For inspiration on containment strategies, see e.g. Ferguson et al. (2020), Halloran et al (2008), and Hellewell et al. (2020). For a taxonomy of ABMs for epidemiological studies, see Hunter et al. (2017).</p>
 
             <!--           <p> Additional research lines concern interventions in the social network, i.e. 'block' agents to go schools, workplaces, and/ or recreation areas, or 'lock' agents from leaving their house. An interesting alternative to indiscrimate interventions in transmission layers, e.g. closing <i>all</i> schools, is to close only those that are 'hubs' in the transmission. </i></p>
-        -->
+            -->
             <p> <B> Acknowledgements </B> </p>
             <p>
                 We want to thank Juan Francisco Robles Fuentes (UGR), Frank Kugelmeier (St. Ursula Attendorn), Rüdiger Kessel (Metrodata), Tobias Gaisser (TH Nürnberg), Hans Bitto, Cristina Ponsiglione (UniNa),
@@ -186,23 +185,23 @@
 
         </div>
     </div>
+
+    <script>
+        // shim layer with setTimeout fallback
+        window.requestAnimFrame = function () {
+            return (
+                window.requestAnimationFrame ||
+                window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame ||
+                window.oRequestAnimationFrame ||
+                window.msRequestAnimationFrame ||
+                function (/* function */ callback) {
+                    window.setTimeout(callback, 1000 / 60);
+                }
+            );
+        }();
+
+    </script>
 </body>
-
-<script>
-    // shim layer with setTimeout fallback
-    window.requestAnimFrame = function () {
-        return (
-            window.requestAnimationFrame ||
-            window.webkitRequestAnimationFrame ||
-            window.mozRequestAnimationFrame ||
-            window.oRequestAnimationFrame ||
-            window.msRequestAnimationFrame ||
-            function (/* function */ callback) {
-                window.setTimeout(callback, 1000 / 60);
-            }
-        );
-    }();
-
-</script>
 </html >
 
